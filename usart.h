@@ -17,8 +17,8 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 
-#define SIZE_TBUF 100       //и размер кольцевых буферов - <255
-#define SIZE_RBUF 20
+#define SIZE_TBUF 200       //и размер кольцевых буферов - <255
+#define SIZE_RBUF 30
 
 void USART_Init(void); //инициализация usart`a
 uint8_t USART_GetTxCount(void); //взять число символов передающего буфера

@@ -1,5 +1,8 @@
 #define DEBOUNCE 10
 
+#define PS2_CMD 0xa1 //data from/to ps2
+#define KEY_CMD 0xa0 //data from keys
+#define ESC_CMD 0x7d
 
 #define FNKEY 0xff
 #define EXTKEY 0xe0
@@ -7,10 +10,10 @@
 #define PAUSEKEY 0x81
 #define PrScrKEY 0x82
 
-const unsigned char PauseCode[] = {0xe1,0x14,0x77,0xe1,0xf0,0x14,0xf0,0x77,0x0};
-const unsigned char PrScrCode[] = {0xe0,0x12,0xe0,0x7c,0x0};
+const uint8_t PauseCode[] = {0xe1,0x14,0x77,0xe1,0xf0,0x14,0xf0,0x77,0x0};
+const uint8_t PrScrCode[] = {0xe0,0x12,0xe0,0x7c,0x0};
 
-const unsigned char scodes[18][8] =  {
+const uint8_t scodes[18][8] PROGMEM = {
 //				 0      1      2    3    4    5    6     7
 //				  v    t      f    g    r   6   5    F6
 				{0x2a,0x2c,0x2b,0x34,0x2d,0x36,0x2e,0x0b},//0
@@ -50,7 +53,7 @@ const unsigned char scodes[18][8] =  {
 				{0x7a,   0,EXTKEY,   0,   0,0,0,0},	//17
 };
 
-const unsigned char fncodes[18][8] =  {
+const uint8_t fncodes[18][8] PROGMEM =  {
 //				                  BL-off
 				{0,0,0,0,0,0,0,EXTKEY+8+6},//0
 //				    u-4        8-8  7-7 TP-off
@@ -103,46 +106,35 @@ enum{
 #define MAXKEYPER 500
 #define DEFKEYPER 100
 
-unsigned char LedFl = 0;
-unsigned char TouchPadOn = 1;
-unsigned char FnKey=0;
+uint8_t LedFl;
+uint8_t TouchPadOn;
+uint8_t FnKey;
 
-uint16_t KeyDelay = DEFKEYDELAY;//ms
-uint16_t KeyPeriod = DEFKEYPER;//ms
+uint16_t KeyDelay;//ms
+uint16_t KeyPeriod;//ms
 
-#define RXCMDTIMEOUT 100
-
-#define PS2_CMD 0xF5 //data from/to ps2
-#define KEY_CMD 0xF4 //data from keys
+#define RXCMDTIMEOUT 10
 
 //На каждую принятую от компьютера команду, или проще сказать на каждый принятый байт,
 // клавиатура/мышь должны обязательно ответить одним из следующих байтов:
 #define ACKNOWLEDGE 0xFA
 //– подтверждение об успешном приеме;
 #define RESEND 0xFE
-//  - команда принята с ошибкой (вероятно ошибка CRC);
-#define FAILURE 0xFC
-// – произошла ошибка (не знаю, что это такое, может внутренняя ошибка устройства?).
 
-//Если компьютер примет от клавиатуры или мыши не 0xFA, а 0xFE или не дай бог 0xFC,
-// то скорее всего будет пытаться переповторить посылку команды или последнего посланного байта.
+#define ERROR 0xFF
 
 //Для клавиатуры компьютер может послать следующие команды:
 #define SET_KEYBOARD_INDICATORS 0xED
-// – зажечь или потушить светодиоды CAPS/NUM/SCROLL.
-// Если клавиатура принимает эту команду, то больше она не пошлет ничего, до тех пор,
-// пока компьютер не пришлет следующий байт-параметр.
-// Этот параметр определяет битовую маску – один бит – это один светодиод.
-// Битовая маска для светодиолов клавиатуры определена вот так:
+
 #define KEYBOARD_KANA_LOCK_ON     8 // Japanese keyboard
 #define KEYBOARD_CAPS_LOCK_ON     4
 #define KEYBOARD_NUM_LOCK_ON      2
 #define KEYBOARD_SCROLL_LOCK_ON   1
 
-#define SELECT_SCAN_CODE_SET 0xF0
-//– установить текущую таблицу кодов клавиш. Следом будет байт-параметр, номер выбираемой таблицы;
+#define SELECT_SCAN_CODE_SET 0xF0 //GET if send 0
+
 #define READ_KEYBOARD_ID 0xF2
-// – не знаю, что это такое. Драйвер из WinDDK похоже не использует эту команду.
+
 #define SET_KEYBOARD_TYPEMATIC 0xF3
 //– это тоже двухбайтовая команда. После этой команды следует параметр определяющий частоту
 // повтора кодов при нажатой клавише и интервал времени между нажатием и началом повторов.
@@ -159,6 +151,11 @@ uint16_t KeyPeriod = DEFKEYPER;//ms
 #define KEYBOARD_RESET 0xFF
 // – получая эту команду клавиатура отвечает, как обычно, 0xFA, а затем, сбрасывается и посылает
 // в ответ байт
+
+#define ATKBD_CMD_RESET_DEF     0xf6  /* Reset to defaults */
+#define ATKBD_CMD_ENABLE        0xf4
+#define ATKBD_CMD_RESET_DIS     0xf5  /* Reset to defaults and disable */
+
 #define KEYBOARD_COMPLETE_SUCCESS 0xAA
 //После подачи напряжения питания клавиатура посылает компьютеру код KEYBOARD_COMPLETE_SUCCESS
  //и немедленно готова к работе.

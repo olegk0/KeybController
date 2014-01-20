@@ -15,7 +15,7 @@
 #include "subs.h"
 
 
-#define USART_BAUDRATE 2400
+#define USART_BAUDRATE 9600
 #define BAUD_PRESCALE (((F_CPU / (USART_BAUDRATE * 16UL))) - 1) 
 
 //макросы для разрешения и запрещения прерываний usart`a
@@ -25,8 +25,9 @@
 #define DisableTxInt()  UCSRB &= (~(1<<TXCIE));
 //передающий буфер
 static volatile uint8_t usartTxBuf[SIZE_TBUF];
-static uint8_t txBufTail = 0;
-static uint8_t txBufHead = 0;
+//static uint8_t txBufTail = 0;
+//static uint8_t txBufHead = 0;
+static volatile uint8_t *in_ptr, *out_ptr;
 static volatile uint8_t txCount = 0;
 
 //приемный буфер
@@ -39,14 +40,15 @@ static volatile uint8_t rxCount = 0;
 //инициализация usart`a
 void USART_Init(void)
 {
+	USART_FlushTxBuf();
+	USART_FlushRxBuf();
+
 	UBRRL = (uint8_t)(BAUD_PRESCALE & 0xff);
 	UBRRH = (uint8_t)(BAUD_PRESCALE >> 8); 
 //разр. прерыв при приеме  разр приема, разр передачи. размер слова 8 разрядов
 	UCSRB = (1<<RXCIE)|(1<<TXCIE)|(1<<RXEN)|(1<<TXEN);
 	/* Set frame format: 8data, 1stop bit */
 	UCSRC = (3<<UCSZ0)+128;
-
-	USART_FlushTxBuf();
 }
 
 //______________________________________________________________________________
@@ -59,8 +61,9 @@ uint8_t USART_GetTxCount(void)
 //"очищает" передающий буфер
 void USART_FlushTxBuf(void)
 {
-  txBufTail = 0;
-  txBufHead = 0;
+//  txBufTail = 0;
+//  txBufHead = 0;
+  in_ptr = out_ptr = usartRxBuf;
   txCount = 0;
 }
 
@@ -74,12 +77,19 @@ void USART_PutChar(uint8_t sym)
 		UDR = sym;
 	}
 	else {
-		if (txCount < SIZE_TBUF){    //если в буфере еще есть место
+/*		if (txCount < SIZE_TBUF){    //если в буфере еще есть место
 		usartTxBuf[txBufTail] = sym; //помещаем в него символ
 		txCount++;                   //инкрементируем счетчик символов
 		txBufTail++;                 //и индекс хвоста буфера
-		if (txBufTail == SIZE_TBUF) txBufTail = 0;
+		if (txBufTail >= SIZE_TBUF) txBufTail = 0;
 		}
+*/
+	*in_ptr++ = sym;
+	txCount++;
+
+	// pointer wrapping
+	if (in_ptr >= usartTxBuf + SIZE_TBUF)
+		in_ptr = usartTxBuf;
 	}
 
 }
@@ -99,10 +109,16 @@ ISR(USART_TX_vect)
 {
 
 	if (txCount > 0){              //если буфер не пустой
-		UDR = usartTxBuf[txBufHead]; //записываем в UDR символ из буфера
+/*		UDR = usartTxBuf[txBufHead]; //записываем в UDR символ из буфера
 		txCount--;                   //уменьшаем счетчик символов
 		txBufHead++;                 //инкрементируем индекс головы буфера
-		if (txBufHead == SIZE_TBUF) txBufHead = 0;
+		if (txBufHead >= SIZE_TBUF) txBufHead = 0;
+*/
+		UDR = *out_ptr++;	  // get byte
+
+		if (out_ptr >= usartTxBuf + SIZE_TBUF) // pointer wrapping
+			out_ptr = usartTxBuf;
+		txCount--;	// decrement buffer count
 	}
 
 } 
@@ -132,7 +148,7 @@ uint8_t USART_GetChar(void)
     sym = usartRxBuf[rxBufHead];        //прочитать из него символ    
     rxCount--;                          //уменьшить счетчик символов
     rxBufHead++;                        //инкрементировать индекс головы буфера  
-    if (rxBufHead == SIZE_RBUF) rxBufHead = 0;
+    if (rxBufHead >= SIZE_RBUF) rxBufHead = 0;
     return sym;                         //вернуть прочитанный символ
   }
   return 0;
@@ -142,9 +158,9 @@ uint8_t USART_GetChar(void)
 ISR(USART_RX_vect) 
 {
   if (rxCount < SIZE_RBUF){                //если в буфере еще есть место                     
+	  if (rxBufTail >= SIZE_RBUF) rxBufTail = 0;  
       usartRxBuf[rxBufTail] = UDR;        //считать символ из UDR в буфер
       rxBufTail++;                             //увеличить индекс хвоста приемного буфера 
-      if (rxBufTail == SIZE_RBUF) rxBufTail = 0;  
       rxCount++;                                 //увеличить счетчик принятых символов
     }
 	else
