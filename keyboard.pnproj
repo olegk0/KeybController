@@ -1,1 +1,1 @@
-<Project name="keyboard"><File path="usart.c"></File><File path="usart.h"></File><File path="subs.h"></File><File path="main.c"></File><File path="Makefile"></File><File path="ps2.c"></File><File path="vars.h"></File></Project>
+<Project name="keyboard"><File path="usart.c"></File><File path="usart.h"></File><File path="subs.h"></File><File path="main.c"></File><File path="Makefile"></File><File path="ps2.c"></File><File path="vars.h"></File><File path="README.md"></File></Project>
