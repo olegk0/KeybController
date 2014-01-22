@@ -11,16 +11,16 @@
 #define EXTKEY 0xe0
 #define TPKEY 0xf1
 #define PAUSEKEY 0x81
-#define PrScrKEY 0x82
+//#define PrScrKEY 0x82
 
-#define SWDISPKEY	0xeb
-#define SWBLKEY		0xec
-#define BLDNKEY		0xe8
-#define BLUPKEY		0xe9
+#define SWDISPKEY	0x60
+#define SWBLKEY		0x61
+#define BLDNKEY		0x62
+#define BLUPKEY		0x63
 
 
 const uint8_t PauseCode[] PROGMEM = {0xe1,0x14,0x77,0xe1,0xf0,0x14,0xf0,0x77,0x0};
-const uint8_t PrScrCode[] PROGMEM = {0xe0,0x12,0xe0,0x7c,0x0};
+const uint8_t BreakCode[] PROGMEM = {0xe0,0x7e,0xe0,0xf0,0x7e,0x0};
 
 const uint8_t scodes[18][8] PROGMEM = {
 //				 0      1      2    3    4    5    6     7
@@ -52,8 +52,8 @@ const uint8_t scodes[18][8] PROGMEM = {
 				{0x52,0x4d,0x49,   0,0x4b,0x46,0x44,0x09},//12
 //				 USD?  -     /         [   F12   0    F11
 				{   0,0x4e,0x4a,   0,0x54,0x07,0x45,0x78},//13
-//				 Left        ]     HOME       Up      ELeft PrScr     =  
-				{EXTKEY+4,0x5b,EXTKEY+8+2,EXTKEY+8+2,0x6b,PrScrKEY,0x55, 0},//14
+//				 Left        ]     HOME       Up      ELeft PrScr     =  PrScr
+				{EXTKEY+4,0x5b,EXTKEY+8+2,EXTKEY+8+2,0x6b,EXTKEY+7,0x55,0x7c},//14
 //				 Down        Right      ;    \    ENT   PAUSE   BcSps END  
 				{EXTKEY+8+2,EXTKEY+8+2,0x4c,0x5d,0x5a,PAUSEKEY,0x66,EXTKEY+8+5},//15
 //				 DEL                 PgUp      
@@ -64,11 +64,11 @@ const uint8_t scodes[18][8] PROGMEM = {
 
 const uint8_t fncodes[18][8] PROGMEM =  {
 //				                  BL-off
-				{0,0,0,0,0,0,0,SWBLKEY},//0
+				{0,0,0,0,0,0,0,EXTKEY+8+6},//0
 //				    u-4        8-8  7-7 TP-off
 				{0,0x6B,0,0,0,0x75,0x6c,TPKEY},//1
-//			           EPlay EVolUp		EMute E/   Fn
-				{0,0  ,0x34 , 0x32  , 0,0x23,0x4a,FNKEY},//2
+//			               EPlay EVolUp		EMute E/   Fn
+				{0,BLUPKEY,0x34 , 0x32  , 0,0x23,0x4a,FNKEY},//2
 //				            F1-?
 				{0,0,0,0,0,0x4a,0,0},//3
 //				 EVolDn            RSh      LSh       ENext
@@ -76,11 +76,11 @@ const uint8_t fncodes[18][8] PROGMEM =  {
 //				       RCtr                  EPower    EWake
 				{    0,   0,   0,   0,   0,  0x37,0, 0x5e},//5
 //				                      Win  ESleep      
-				{  0,   0,   0,   0,    0,  0x3f,   0,0},//6
+				{  0,   0,   0,   0,    0,  0x3f,   0,SWBLKEY},//6
 //				             F2-Power     F3- Wake
 				{0,0,0,0,0,EXTKEY+8+5,0,EXTKEY+8+5},//7
-//				               F4-Sleep    F5-SwDsp
-				{0  ,0,0,0,0,EXTKEY+8+6,0,SWDISPKEY},//8
+//				                    F4-Sleep    F5-SwDsp
+				{SWDISPKEY,0,0,0,0,EXTKEY+8+6,0,EXTKEY},//8
 //				  RAl      LAl
 				{   0,   0,  0,   0,   0,   0,   0,   0},//9
 //				    j-1    m-0  k-2   F8-Mute   i-5 
@@ -92,9 +92,9 @@ const uint8_t fncodes[18][8] PROGMEM =  {
 //				 USD?    /-+         F12-SCRL  0-/       F11-Nl
 				{   0,0,0x79,   0,0,  0x7e  ,EXTKEY+8+2,0x77},//13
 //				 Left-Lgt-    HOME-Play   Up-VolUp
-				{BLDNKEY  ,0,EXTKEY+8+2,EXTKEY+8+2,0,0,0,0},//14
+				{EXTKEY+4 ,0,EXTKEY+8+2,EXTKEY+8+2,BLDNKEY,0,0,0},//14
 //				 Down-VolDn  Right-Lgt+ ;--           END-Next
-				{EXTKEY+8+4,BLUPKEY   ,0x7b,0,0,0,0,EXTKEY+8+4},//15
+				{EXTKEY+8+4,EXTKEY+8+2,0x7b,0,0,0,0,EXTKEY+8+4},//15
 //				  DEL      	     PgUp-Stop             
 				{   0,   0x3b,  0,EXTKEY+1 ,0,0,   0,0},//16
 //				            PgDn-Prev            
@@ -118,7 +118,7 @@ enum{
 uint8_t CurSession;
 uint8_t LastInSesion;
 uint8_t LastCmd;
-uint8_t ESCwas;
+//uint8_t ESCwas;
 
 uint8_t LedFl;
 uint8_t TouchPadOn;

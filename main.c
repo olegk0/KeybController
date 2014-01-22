@@ -70,8 +70,12 @@ void SetDef(void)
 
 void SendESCifNeed(uint8_t data)
 {
-	if( data == PS2_CMD || data == KEY_CMD || data == ESC_CMD || data == BSYNC ||
-											data ==SESEND_CMD || data == SESRST_CMD)
+	if( data == PS2_CMD ||
+			data == KEY_CMD ||
+			data == ESC_CMD ||
+			data == BSYNC ||
+			data ==SESEND_CMD ||
+			data == SESRST_CMD)
 		USART_PutChar(ESC_CMD);
 }
 
@@ -97,11 +101,7 @@ uint8_t tmp;
 
 }
 
-void SendKeyRet(uint8_t dt)
-{
-		SetSession(KEY_CMD);
-		USART_PutChar(dt);
-}
+#define SendKeyRet(x) {SetSession(KEY_CMD);USART_PutChar(x);}
 
 void CmdToKeyb(uint8_t dt)
 {
@@ -113,6 +113,7 @@ void CmdToKeyb(uint8_t dt)
 		switch(LastCmd){
 		case SET_KEYBOARD_INDICATORS:
 			LedFl = dt;
+			SwLEDs();
 			break;
 		case SET_KEYBOARD_TYPEMATIC:
 			KeyDelay = (1+((dt>>5) & 3))*250;
@@ -140,9 +141,6 @@ void CmdToKeyb(uint8_t dt)
 	else{
 		switch(dt){
 		case KEYBOARD_RESET:
-/*			wdt_enable(WDTO_120MS);
-			while(1);
-*/
 			SendKeyRet(ACKNOWLEDGE);
 			ret = KEYBOARD_COMPLETE_SUCCESS;
 			break;
@@ -169,54 +167,20 @@ void CmdToKeyb(uint8_t dt)
 	SendKeyRet(ret);
 }
 
-
-void rxUdata(void)
+void SendToDevs(uint8_t rx)
 {
-	uint8_t rx;
-
-	rx = USART_GetChar();
-	
-	if(ESCwas){
-		ESCwas = 0;
-		if(LastInSesion == PS2_CMD)
-			ps2_send_byte(rx);
-		else
-			CmdToKeyb(rx);
-		return;
+	if(LastInSesion == PS2_CMD){
+		ps2_send_byte(rx);
+//		if(rx == KEYBOARD_RESET)
+//			ps2_init();
 	}
-	
-	switch(rx){
-	case ESC_CMD:
-		ESCwas = 1;
-		break;
-	case PS2_CMD:
-	case KEY_CMD:
-		SetSession(rx);
-		LastInSesion = rx;
-		break;
-	case SESRST_CMD://session reset
-		SetSession(KEY_CMD);
-		LastInSesion = KEY_CMD;
-		LastCmd = 0;
-		ps2_init();//check
-		break;
-	case SESEND_CMD://for compatibility
-	case BSYNC:
-		break;
-	default:
-		if(LastInSesion == PS2_CMD)
-			ps2_send_byte(rx);
-		else
-			CmdToKeyb(rx);
-	}
-
+	else
+		CmdToKeyb(rx);
+	return;
 }
 
-void SendKeyData(uint8_t dt)
-{
-	SendESCifNeed(dt);
-	USART_PutChar(dt);
-}
+
+#define SendKeyData(x) {SendESCifNeed(x);USART_PutChar(x);}
 
 void SendLongKey(uint8_t *code)
 {
@@ -275,11 +239,11 @@ uint8_t i,tmp;
 				if(cmd == PRESSED)
 					SendLongKey((uint8_t *)PauseCode);
 				break;
-			case PrScrKEY:
+/*			case PrScrKEY:
 				if(cmd == PRESSED)
 					SendLongKey((uint8_t *)PrScrCode);
 				break;
-			default:
+*/			default:
 				if(tmp){
 					if(cmd == RELEASE)
 						USART_PutChar(KEYBOARD_BREAK_CODE);
@@ -297,6 +261,7 @@ void main (void)
 uint32_t sout;
 uint8_t lbuf[18]={ 0 }; //last state
 uint8_t deb, cnt,st,st1,ind, pressed, released, notchanged;
+uint8_t ESCwas;
 
 	wdt_reset();
 	wdt_disable();
@@ -339,51 +304,83 @@ uint8_t deb, cnt,st,st1,ind, pressed, released, notchanged;
 
 	while(1){
 		if(USART_GetRxCount())
-			rxUdata();
-
-		sout=2;//to second col
-		//18 bit PORTC PORTB PORTD(2-3) output Z
-		//to first col
-		DDRC=0;
-		DDRB = 0;
-		DDRD &= ~(64+128);
-		DDRD |= 64;
+//******** void rxUdata(void)***************
+		{
+			st = USART_GetChar();
+			if(ESCwas){
+				ESCwas = 0;
+				SendToDevs(st);
+			}
 	
-		ind = 0;
-		delay(10);//delay before first read TODO check
-		for(cnt=0;cnt<18;cnt++){
-			st = 0;
-			deb = DEBOUNCE;
-			while(deb){
-				st |= ~PINA;//read curr state
-				deb--;
+			switch(st){
+			case ESC_CMD:
+				ESCwas = 1;
+				break;
+			case PS2_CMD:
+			case KEY_CMD:
+				SetSession(st);
+				LastInSesion = st;
+				break;
+			case SESRST_CMD://session reset
+				SetSession(KEY_CMD);
+				LastInSesion = KEY_CMD;
+				LastCmd = 0;
+				break;
+			case BSYNC:
+				wdt_enable(WDTO_120MS);//for debug
+				while(1);
+			case SESEND_CMD://for compatibility
+				break;
+			default:
+				SendToDevs(st);
 			}
-//set new cols data
+		}
+//*****************************************
+		if(!LastCmd){
+			sout=2;//to second col
+			//18 bit PORTC PORTB PORTD(2-3) output Z
+			//to first col
+			DDRC=0;
+			DDRB = 0;
 			DDRD &= ~(64+128);
-			DDRD |= (sout<<6) & (64+128);
-			DDRB = (sout>>2) & 0xff;
-			DDRC = (sout>>10) & 0xff;
-			sout <<=1;
-//process
-			st1 = lbuf[cnt];//last state
-			pressed = (~st1)&st;
-			released = (~st)&st1;
-			notchanged = st&st1;//for repeat
-			if(pressed){
-				SendCode(cnt,pressed,PRESSED);
-				t1_on_Xms(KeyDelay)
-			}
-			SendCode(cnt,released,RELEASE);
-			if(notchanged){
-				if(t1_overflow()){
-					SendCode(cnt,notchanged,REPEAT);//repeat
-					t1_on_Xms(KeyPeriod)
+			DDRD |= 64;
+	
+			ind = 0;
+			delay(10);//delay before first read TODO check
+			for(cnt=0;cnt<18;cnt++){
+				st = 0;
+				deb = DEBOUNCE;
+				while(deb){
+					st |= ~PINA;//read curr state
+					deb--;
 				}
-			}
+	//set new cols data
+				DDRD &= ~(64+128);
+				DDRD |= (sout<<6) & (64+128);
+				DDRB = (sout>>2) & 0xff;
+				DDRC = (sout>>10) & 0xff;
+				sout <<=1;
+	//process
+				st1 = lbuf[cnt];//last state
+				pressed = (~st1)&st;
+				released = (~st)&st1;
+				notchanged = st&st1;//for repeat
+				if(pressed){
+					SendCode(cnt,pressed,PRESSED);
+					t1_on_Xms(KeyDelay)
+				}
+				SendCode(cnt,released,RELEASE);
+				if(notchanged){
+					if(t1_overflow()){
+						SendCode(cnt,notchanged,REPEAT);//repeat
+						t1_on_Xms(KeyPeriod)
+					}
+				}
 				
-			lbuf[cnt] = st;//last state
-			CheckPS2Buf();
-		}		
+				lbuf[cnt] = st;//last state
+				CheckPS2Buf();
+			}
+		}
 		wdt_reset();
 	}	
 

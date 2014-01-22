@@ -30,7 +30,7 @@
 #define PS2_DATA		PD3
 
 static volatile uint8_t ps2_data;						/* holds the received mouse data */
-static volatile uint8_t edge, bitcount;			 /* edge: 0 = neg.	1 = pos. */
+static volatile uint8_t edge, bitcount, rstfl;			 /* edge: 0 = neg.	1 = pos. */
 static volatile uint8_t *in_ptr, *out_ptr;
 static volatile uint8_t ps2_buffcnt;
 static uint8_t ps2_buffer[PS2_BUFF_SIZE];
@@ -48,28 +48,34 @@ void ps2_clear_buffer(void)
 /*
  * Initialize the PS/2 
  */
+void ps2_minit(void)
+{
+	MCUCR |= _BV(ISC01);	/* INT0 interrupt on falling edge */
+	MCUCR &= ~_BV(ISC00);
+	edge = 0;				/* 0 = falling edge  1 = rising edge */
+	bitcount = 11;
+	ps2_data = 0;
+}
+
 void ps2_init(void)
 {
+	GICR &= ~_BV(INT0);		
 	/* MS clock and data as input */
 	PS2_DDR  &= ~_BV(PS2_DATA);
 	PS2_DDR &= ~_BV(PS2_CLOCK);
 	/* MS clock and data to low */
 	PS2_PORT  &= ~_BV(PS2_DATA);
 	PS2_PORT &= ~_BV(PS2_CLOCK);
-	
-	GICR = _BV(INT0);		/* enable irpt 1 */
-	MCUCR |= _BV(ISC01);	/* INT0 interrupt on falling edge */
-	MCUCR &= ~_BV(ISC00);
-
+	ps2_minit();
 	ps2_clear_buffer();
-	edge = 0;				/* 0 = falling edge  1 = rising edge */
-	bitcount = 11;
 	TIMSK |= _BV(TOIE2); /* allow timer2 overflow */
-	ps2_data = 0;
+	rstfl = 0;
+	GICR |= _BV(INT0);		/* enable irpt 0 */
 }
 
 static void ps2buf_put(uint8_t c)
 {
+if(TouchPadOn){
 	// put character into buffer and incr ptr 
 	*in_ptr++ = c;
 	ps2_buffcnt++;
@@ -77,6 +83,7 @@ static void ps2buf_put(uint8_t c)
 	// pointer wrapping
 	if (in_ptr >= ps2_buffer + PS2_BUFF_SIZE)
 		in_ptr = ps2_buffer;
+}
 }
 
 uint8_t ps2buf_get(void)
@@ -96,11 +103,8 @@ uint8_t ps2buf_get(void)
 
 ISR(INT0_vect)
 {
-	if(TouchPadOn){
-		if(t2_overflow())
-			ps2_data = 0;
-		t2_on_512us();
-
+//		t2_on_512us();
+//		rstfl = 1;
 		if (!edge) {								/* routine entered at falling edge */
 			if (bitcount < 11 && bitcount > 2) {	/* bit 3 to 10 is data. Parity bit, */
 												/* start and stop bits are ignored. */
@@ -120,13 +124,17 @@ ISR(INT0_vect)
 				bitcount = 11;
 			}
 		}
-	}
 }
 
 ISR(TIMER2_OVF_vect)
 {
     TCCR2 = 0; /* stop timer2 and reset TCCR2 to indicate the overflow */
     TCNT2 = 0;
+/*	if(rstfl){//on the safe side
+		rstfl = 0;
+		ps2_minit();
+	}
+*/
 }
 
 
@@ -228,7 +236,9 @@ static uint8_t ps2_send_byte(uint8_t data)
 	/* clear interrupt flag bit (write a 1) to prevent ISR entry upon irpt enable */
 	GIFR = _BV(INTF0);
 
-	/* enable mouse irpt */
+	ps2_minit();
+	ps2_clear_buffer();
+	/* enable ps2 irpt */
 	GICR |= _BV(INT0);
 
 	/* stop timer */
